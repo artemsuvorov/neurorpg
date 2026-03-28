@@ -36,14 +36,20 @@ set(GGML_CUDA ON CACHE BOOL "Enable CUDA" FORCE)
 
 # For GTX 1060 Ti compatibility
 set(CMAKE_CUDA_ARCHITECTURES "61" CACHE STRING "CUDA architectures" FORCE)
-set(CMAKE_CUDA_ARCHITECTURES "61" CACHE STRING "CUDA architectures" FORCE)
 set(GGML_CUDA_ARCHS "61" CACHE STRING "CUDA architectures for llama.cpp" FORCE)
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_61")
-set(CMAKE_CUDA_ARCHITECTURES OFF CACHE BOOL "" FORCE)
 
 find_package(CUDAToolkit REQUIRED)
 
 add_subdirectory(lib/llama.cpp)
+
+# --------------------------------------------------
+# Multithreading & Net support
+# --------------------------------------------------
+
+# find_package(OpenSSL REQUIRED)
+find_package(Threads REQUIRED)
+
 
 # --------------------------------------------------
 # Project sources
@@ -64,7 +70,20 @@ target_include_directories(shared PUBLIC src/shared)
 # ------------------------------------------------------------
 add_executable(server)
 target_sources(server PRIVATE ${SERVER_SOURCES})
-target_link_libraries(server PRIVATE shared llama)
+target_link_libraries(server PRIVATE
+    shared
+    llama
+    Threads::Threads
+)
+if (WIN32)
+    target_link_libraries(server PRIVATE ws2_32)
+endif()
+target_include_directories(server PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib/asio/include
+)
+target_compile_definitions(server PRIVATE
+    ASIO_STANDALONE
+)
 
 # ------------------------------------------------------------
 #  Client executable
