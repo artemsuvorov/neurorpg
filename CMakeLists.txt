@@ -22,6 +22,9 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
 endif()
 
+# Enable folder support for IDE (Visual Studio)
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+
 # --------------------------------------------------
 # llama.cpp configuration with CUDA
 # --------------------------------------------------
@@ -50,6 +53,9 @@ add_subdirectory(lib/llama.cpp)
 # find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
 
+add_library(asio INTERFACE)
+target_sources(asio INTERFACE lib/asio/include/asio.hpp)
+target_include_directories(asio INTERFACE lib/asio/include)
 
 # --------------------------------------------------
 # Project sources
@@ -74,6 +80,7 @@ target_link_libraries(server PRIVATE
     shared
     llama
     Threads::Threads
+    asio
 )
 if (WIN32)
     target_link_libraries(server PRIVATE ws2_32)
@@ -104,6 +111,52 @@ else()
     target_compile_options(client PRIVATE -Wall -Wextra -Wpedantic -Werror)
     target_compile_options(server PRIVATE -Wall -Wextra -Wpedantic -Werror)
 endif()
+
+# ------------------------------------------------------------
+#  Tests (optional)
+# ------------------------------------------------------------
+option(NEURO_BUILD_TESTS "Build unit tests" ON)
+
+if(NEURO_BUILD_TESTS)
+    enable_testing()
+
+    file(GLOB_RECURSE TEST_SOURCES CONFIGURE_DEPENDS tests/*.cpp)
+    add_executable(tests ${TEST_SOURCES})
+    target_link_libraries(tests PRIVATE shared Threads::Threads asio)
+    target_include_directories(tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/asio/include)
+    target_compile_definitions(tests PRIVATE ASIO_STANDALONE)
+    set_target_properties(tests PROPERTIES
+        CXX_STANDARD 20
+        CXX_STANDARD_REQUIRED ON
+    )
+
+    if (MSVC)
+        target_compile_options(tests PRIVATE /W4)
+    else()
+        target_compile_options(tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    endif()
+
+    add_test(NAME NeuroCoreTests COMMAND $<TARGET_FILE:tests>)
+endif()
+
+# ------------------------------------------------------------
+#  Organize targets into folders in the IDE
+# ------------------------------------------------------------
+set(our_targets client server shared)
+foreach(target ${our_targets})
+    set_target_properties(${target} PROPERTIES FOLDER "Game")
+endforeach()
+
+if(NEURO_BUILD_TESTS)
+    set_target_properties(tests PROPERTIES FOLDER "Tests")
+endif()
+
+set_target_properties(asio PROPERTIES FOLDER "Libs")
+set_target_properties(llama PROPERTIES FOLDER "Libs")
+set_target_properties(ggml PROPERTIES FOLDER "Libs")
+set_target_properties(ggml-base PROPERTIES FOLDER "Libs")
+set_target_properties(ggml-cpu PROPERTIES FOLDER "Libs")
+set_target_properties(ggml-cuda PROPERTIES FOLDER "Libs")
 
 # Optional: print a message after successful build
 message(STATUS "Project configured. Build with: cmake --build build --config ${CMAKE_BUILD_TYPE}")
