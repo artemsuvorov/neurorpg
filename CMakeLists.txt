@@ -99,7 +99,7 @@ add_executable(client)
 target_sources(client PRIVATE ${CLIENT_SOURCES})
 target_link_libraries(client PRIVATE shared llama)
 
-set_target_properties(client server shared PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+set_target_properties(client server shared PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
 
 # Set working directory to project root for debugging
 set_target_properties(client server PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
