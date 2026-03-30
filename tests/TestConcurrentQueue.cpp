@@ -1,4 +1,6 @@
-﻿#include <iostream>
+﻿#pragma once
+
+#include <iostream>
 #include <thread>
 #include <vector>
 #include <atomic>
@@ -9,10 +11,10 @@
 #include "ConcurrentQueue.h"
 
 
-using namespace Neuro::Core;
+namespace Neuro::Tests::Internal {
 
+	using namespace Neuro::Core;
 
-namespace Neuro::Tests {
 
 	// Helper: custom type to track constructions/destructions
 	struct Tracker
@@ -121,7 +123,9 @@ namespace Neuro::Tests {
 	{
 		ConcurrentQueue<int> q;
 		std::thread consumer([&q] {
-			int val = q.Dequeue();
+			int val;
+			while (!q.TryDequeue(val))
+				std::this_thread::yield();
 			assert(val == 123);
 			(void)val;
 		});
@@ -334,8 +338,8 @@ namespace Neuro::Tests {
 	}
 
 
-	// Test 10: enqueue many items before any dequeue (semaphore count high)
-	static void test_large_semaphore()
+	// Test 10: enqueue many items before any dequeue
+	static void test_large_volume_ordering()
 	{
 		const int N = 100000;
 		ConcurrentQueue<int> q;
@@ -349,7 +353,7 @@ namespace Neuro::Tests {
 			assert(val == i);
 			(void)val;
 		}
-		std::cout << "test_large_semaphore passed\n";
+		std::cout << "test_large_volume_ordering passed\n";
 	}
 
 
@@ -369,8 +373,9 @@ namespace Neuro::Tests {
 		int out2;
 		assert(q.TryDequeue(out2));
 		// Drain all
-		for (int i = 0; i < 5; ++i)
-			q.Dequeue();
+		int tmp;
+		while (q.TryDequeue(tmp))
+			;  // keep draining
 		assert(!q.TryDequeue(out2));
 		(void)out2;
 		std::cout << "test_try_dequeue_after_drain passed\n";
@@ -410,13 +415,17 @@ namespace Neuro::Tests {
 		std::thread consumer([&q, &consumed, total] {
 			while (consumed.load() < total)
 			{
-				int val = q.Dequeue();  // blocks until an item is available
+				int val;
+				if (!q.TryDequeue(val))
+				{
+					std::this_thread::yield();
+					continue;
+				}
+
 				consumed++;
 				(void)val;
 				if (consumed % 1000 == 0)
-				{
 					std::this_thread::yield();  // occasional yield to keep things fair
-				}
 			}
 		});
 
@@ -463,65 +472,74 @@ namespace Neuro::Tests {
 	}
 
 
-	// Test 15: Semaphore count verification (by enqueuing N items, then dequeuing them all, ensuring no extra semaphore
-	// signals)
-	static void test_semaphore_count()
+	// Test 15: Test that empty queue behaves correctly
+	static void test_empty_behavior()
 	{
 		ConcurrentQueue<int> q;
-		const int N = 10000;
-		for (int i = 0; i < N; ++i)
-			q.Enqueue(i);
-		// Drain all items
-		for (int i = 0; i < N; ++i)
-		{
-			int val = q.Dequeue();
-			(void)val;
-		}
-		// Now the queue should be empty. We'll start a thread that tries to dequeue one more item.
-		std::atomic<bool> started{false};
-		std::thread consumer([&q, &started] {
-			started = true;
-			int val = q.Dequeue();  // should block because queue empty
-			(void)val;
-			started = false;
-		});
-		// Wait a bit to see if the thread blocked (i.e., started is still true)
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
-		if (!started)
-		{
-			// If started is false, the thread didn't start or already finished - meaning Dequeue returned immediately.
-			// That would indicate the semaphore count was >0 when it should be 0.
-			assert(false && "Semaphore count mismatch: Dequeue returned immediately when queue should be empty");
-		}
-		// Now enqueue an item to unblock the consumer
+
+		int val;
+		assert(!q.TryDequeue(val));
+
 		q.Enqueue(42);
-		consumer.join();
-		assert(!started);  // should have finished after the item was enqueued
-		std::cout << "test_semaphore_count passed\n";
+		assert(q.TryDequeue(val));
+		assert(val == 42);
+
+		assert(!q.TryDequeue(val));
+
+		std::cout << "test_empty_behavior passed\n";
+	}
+
+
+	// Test 16: Enqueue after heavy draining
+	static void test_reuse_after_drain()
+	{
+		ConcurrentQueue<int> q;
+
+		for (int round = 0; round < 5; ++round)
+		{
+			for (int i = 0; i < 1000; ++i)
+				q.Enqueue(i);
+
+			int val;
+			int count = 0;
+			while (q.TryDequeue(val))
+				count++;
+
+			assert(count == 1000);
+		}
+
+		std::cout << "test_reuse_after_drain passed\n";
+	}
+
+}  // namespace Neuro::Tests::Internal
+
+
+namespace Neuro::Tests {
+
+	void TestConcurrentQueue()
+	{
+		using namespace Internal;
+
+		std::cout << "Running TestConcurrentQueue:\n\n";
+
+		test_basic();
+		test_multiple_producers();
+		test_blocking();
+		test_stress_volume();
+		test_random_delays();
+		test_try_dequeue();
+		test_move_only_type();
+		test_move_only_tracking();
+		test_destruction_with_items();
+		test_large_volume_ordering();
+		test_try_dequeue_after_drain();
+		test_heavy_contention();
+		test_large_volume();
+		test_non_trivial_move_type();
+		test_empty_behavior();
+		test_reuse_after_drain();
+
+		std::cout << "All tests passed.\n\n";
 	}
 
 }  // namespace Neuro::Tests
-
-
-int main()
-{
-	using namespace Neuro::Tests;
-
-	test_basic();
-	test_multiple_producers();
-	test_blocking();
-	test_stress_volume();
-	test_random_delays();
-	test_try_dequeue();
-	test_move_only_type();
-	test_move_only_tracking();
-	test_destruction_with_items();
-	test_large_semaphore();
-	test_try_dequeue_after_drain();
-	test_heavy_contention();
-	test_large_volume();
-	test_non_trivial_move_type();
-	test_semaphore_count();
-
-	std::cout << "All tests passed.\n";
-}

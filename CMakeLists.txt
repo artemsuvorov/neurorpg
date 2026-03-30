@@ -125,10 +125,7 @@ if(NEURO_BUILD_TESTS)
     target_link_libraries(tests PRIVATE shared Threads::Threads asio)
     target_include_directories(tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/asio/include)
     target_compile_definitions(tests PRIVATE ASIO_STANDALONE)
-    set_target_properties(tests PROPERTIES
-        CXX_STANDARD 20
-        CXX_STANDARD_REQUIRED ON
-    )
+    set_target_properties(tests PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
 
     if (MSVC)
         target_compile_options(tests PRIVATE /W4)

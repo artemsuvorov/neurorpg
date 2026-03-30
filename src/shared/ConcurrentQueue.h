@@ -1,7 +1,6 @@
 #pragma once
 
 #include <atomic>
-#include <semaphore>
 
 
 // NOTE: Queue was padded due to alignment specifier (intentional for cache-line alignment).
@@ -16,16 +15,29 @@ namespace Neuro::Core {
 	// Lock-free Multi-producer Single-consumer concurrent unbounded Queue.
 	// Empty Slot means end of the Queue.
 	//
+	// This queue is intentionally "policy-free".
+	// It is purely a data structure responsible for:
+	// - safe concurrent Enqueue (multi-producer)
+	// - safe single-threaded Dequeue (single-consumer)
+	// - it does NOT: block, sleep, yield, etc.
+	//
+	// This queue provides only the mechanism.
+	// The caller provides the policy.
+	// Because otherwise mixing synchronization policy with the data structure leads to:
+	// - hidden performance costs
+	// - inflexible behavior across different workloads
+	// - harder reasoning about threading behavior
+	//
+	//
 	// Constraints:
-	// 1. Only one thread may call Dequeue.
-	// 2. No calls to Enqueue may happen after the destructor starts.
-	//    (i.e., the queue must be empty or all producers must have stopped before destruction)
+	// 1. Only ONE thread may call TryDequeue / Dequeue.
+	// 2. Producers may call Enqueue concurrently.
+	// 3. No Enqueue after destruction begins.
 	//
 	// TODO: Need optimize allocations (lock-free freelist or per-thread pool).
 	//
 	template <typename TValue>
-	    requires std::is_default_constructible_v<TValue>
-	class ConcurrentQueue
+	class ConcurrentQueue final
 	{
 	private:
 		struct Slot;
@@ -51,27 +63,34 @@ namespace Neuro::Core {
 		ConcurrentQueue();
 		~ConcurrentQueue();
 
+		ConcurrentQueue(const ConcurrentQueue&) = delete;
+		ConcurrentQueue& operator=(const ConcurrentQueue&) = delete;
+
+		ConcurrentQueue(ConcurrentQueue&&) = delete;
+		ConcurrentQueue& operator=(ConcurrentQueue&&) = delete;
+
 		template <typename... Args>
 		void Enqueue(Args&&... args);
 
-		// Block until an item is available, then return it.
-		TValue Dequeue();
-		// Non-blocking peek, returns true if an item was dequeued.
+		// Non-blocking dequeue attempt.
+		// Returns true if an item was dequeued.
+		// NOTE: If the queue is empty, this returns false immediately without waiting.
 		bool TryDequeue(TValue& out);
+
+		// Convenience blocking-like dequeue.
+		// NOTE: This is NOT truly blocking, it spins until an item becomes available.
+		// The caller should generally prefer TryDequeue and implement a proper waiting strategy externally.
+		TValue Dequeue();
 
 	private:
 		// Atomic for Multiple producers.
 		alignas(64) AtomicSlotPtr m_Head;
 		// Non-atomic for Single consumer.
 		alignas(64) SlotPtr m_Tail;
-
-		static const uint32_t kSemaphoreSize = UINT_MAX;
-		std::counting_semaphore<kSemaphoreSize> m_Semaphore{0};
 	};
 
 
 	template <typename TValue>
-	    requires std::is_default_constructible_v<TValue>
 	inline ConcurrentQueue<TValue>::ConcurrentQueue()
 	{
 		Slot* dummy = new Slot();
@@ -81,49 +100,29 @@ namespace Neuro::Core {
 
 
 	template <typename TValue>
-	    requires std::is_default_constructible_v<TValue>
 	inline ConcurrentQueue<TValue>::~ConcurrentQueue()
 	{
-		while (true)
+		// NOTE: Caller must ensure no concurrent producers/consumer.
+		while (m_Tail)
 		{
-			Slot* tail = m_Tail;
-			Slot* next = tail->Next.load(std::memory_order::acquire);
-			if (!next)
-				break;
-
+			Slot* next = m_Tail->Next.load(std::memory_order::acquire);
+			delete m_Tail;
 			m_Tail = next;
-			delete tail;
 		}
-		delete m_Tail;
 	}
 
 
 	template <typename TValue>
-	    requires std::is_default_constructible_v<TValue>
 	template <typename... Args>
 	inline void ConcurrentQueue<TValue>::Enqueue(Args&&... args)
 	{
 		Slot* slot = new Slot(std::forward<Args>(args)...);
 		Slot* prev = m_Head.exchange(slot, std::memory_order::acq_rel);
 		prev->Next.store(slot, std::memory_order::release);
-		m_Semaphore.release();
 	}
 
 
 	template <typename TValue>
-	    requires std::is_default_constructible_v<TValue>
-	inline TValue ConcurrentQueue<TValue>::Dequeue()
-	{
-		m_Semaphore.acquire();
-		TValue out;
-		while (!TryDequeue(out))
-			;
-		return out;
-	}
-
-
-	template <typename TValue>
-	    requires std::is_default_constructible_v<TValue>
 	inline bool ConcurrentQueue<TValue>::TryDequeue(TValue& out)
 	{
 		Slot* tail = m_Tail;
@@ -135,6 +134,24 @@ namespace Neuro::Core {
 		m_Tail = next;
 		delete tail;
 		return true;
+	}
+
+
+	template <typename TValue>
+	inline TValue ConcurrentQueue<TValue>::Dequeue()
+	{
+		while (true)
+		{
+			Slot* tail = m_Tail;
+			Slot* next = tail->Next.load(std::memory_order::acquire);
+			if (!next)
+				continue;
+
+			TValue out = std::move(next->Value);
+			m_Tail = next;
+			delete tail;
+			return out;
+		}
 	}
 
 }  // namespace Neuro::Core

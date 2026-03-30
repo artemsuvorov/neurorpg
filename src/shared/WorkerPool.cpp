@@ -52,7 +52,15 @@ namespace Neuro::Net {
 		// All tasks that happen to go after Stop will be discarded without execution.
 		while (true)
 		{
-			Task task = m_Queue.Dequeue();
+			Task task;
+
+			// TODO: Implement some backoff strategy later or a blocking primitive (semaphore/condvar).
+			if (!m_Queue.TryDequeue(task))
+			{
+				std::this_thread::yield();
+				continue;
+			}
+
 			assert(IsTaskValid(task));
 			static_assert((uint32_t)ETaskType::kNum == 2, "Add task type support.");
 
