@@ -478,6 +478,7 @@ namespace Neuro::Tests::Internal {
 		ConcurrentQueue<int> q;
 
 		int val;
+		(void)val;
 		assert(!q.TryDequeue(val));
 
 		q.Enqueue(42);
