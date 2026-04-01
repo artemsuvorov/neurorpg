@@ -512,6 +512,118 @@ namespace Neuro::Tests::Internal {
 		std::cout << "test_reuse_after_drain passed\n";
 	}
 
+
+	// Test 17: Stress test specifically designed to expose the dummy node hazard
+	// by creating many enqueue/dequeue operations with random delays.
+	static void test_dummy_node_hazard()
+	{
+		const int num_producers = 8;
+		const int items_per_producer = 2500;  // total 20,000 items
+
+		std::random_device rd;
+		for (int run = 0; run < 10; ++run)  // repeat to increase chance of hitting race
+		{
+			ConcurrentQueue<int> q;
+			std::vector<std::thread> producers;
+			std::atomic<int> produced{0};
+			std::atomic<int> consumed{0};
+			const int total = num_producers * items_per_producer;
+
+			// Producers with random yields
+			for (int i = 0; i < num_producers; ++i)
+			{
+				producers.emplace_back([&q, &produced, i, items_per_producer, seed = rd()] {
+					std::mt19937 rng(seed);
+					std::uniform_int_distribution<int> delay_prob(0, 99);
+					for (int j = 0; j < items_per_producer; ++j)
+					{
+						q.Enqueue(i * items_per_producer + j);
+						produced++;
+						if (delay_prob(rng) < 5)  // 5% chance to yield
+							std::this_thread::yield();
+					}
+				});
+			}
+
+			// Consumer with random delays and occasional yields
+			std::thread consumer([&q, &consumed, total, seed = rd()] {
+				std::mt19937 rng(seed);
+				std::uniform_int_distribution<int> delay_prob(0, 99);
+				std::vector<int> seen(total, 0);
+				while (consumed.load() < total)
+				{
+					int val;
+					if (q.TryDequeue(val))
+					{
+						assert(val >= 0 && val < total);
+						seen[val]++;
+						consumed++;
+					}
+					else
+					{
+						if (delay_prob(rng) < 2)  // occasional yield when empty
+							std::this_thread::yield();
+					}
+				}
+				// Verify all items seen exactly once
+				for (int i = 0; i < total; ++i)
+					assert(seen[i] == 1);
+			});
+
+			for (auto& t : producers)
+				t.join();
+			consumer.join();
+
+			assert(produced == total);
+			assert(consumed == total);
+		}
+		std::cout << "test_dummy_node_hazard passed\n";
+	}
+
+
+	// Test 18: Use a complex type that may expose memory corruption if dummy node is mishandled
+	static void test_complex_type()
+	{
+		struct Complex
+		{
+			std::vector<int> data;
+			std::string name;
+			int id;
+
+			Complex() : id(0) {}
+			Complex(int i) : data({i, i + 1, i + 2}), name("Item" + std::to_string(i)), id(i) {}
+			Complex(const Complex&) = delete;
+			Complex(Complex&&) = default;
+			Complex& operator=(const Complex&) = delete;
+			Complex& operator=(Complex&&) = default;
+		};
+
+		const int num_items = 50000;
+		ConcurrentQueue<Complex> q;
+
+		// Enqueue many items
+		for (int i = 0; i < num_items; ++i)
+			q.Enqueue(Complex(i));
+
+		// Dequeue and verify
+		for (int i = 0; i < num_items; ++i)
+		{
+			Complex c = q.Dequeue();
+			assert(c.id == i);
+			assert(c.data.size() == 3);
+			assert(c.data[0] == i);
+			assert(c.data[1] == i + 1);
+			assert(c.data[2] == i + 2);
+			assert(c.name == "Item" + std::to_string(i));
+		}
+
+		// Ensure queue is empty
+		Complex dummy;
+		assert(!q.TryDequeue(dummy));
+
+		std::cout << "test_complex_type passed\n";
+	}
+
 }  // namespace Neuro::Tests::Internal
 
 
@@ -539,6 +651,8 @@ namespace Neuro::Tests {
 		test_non_trivial_move_type();
 		test_empty_behavior();
 		test_reuse_after_drain();
+		test_dummy_node_hazard();
+		test_complex_type();
 
 		std::cout << "All tests passed.\n\n";
 	}

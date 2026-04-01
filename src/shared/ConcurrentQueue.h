@@ -49,7 +49,7 @@ namespace Neuro::Core {
 
 		struct Slot final
 		{
-			SlotVal Value;
+			SlotVal Value{};
 			AtomicSlotPtr Next{nullptr};
 
 			Slot() = default;
@@ -83,10 +83,8 @@ namespace Neuro::Core {
 		TValue Dequeue();
 
 	private:
-		// Atomic for Multiple producers.
-		alignas(64) AtomicSlotPtr m_Head;
-		// Non-atomic for Single consumer.
-		alignas(64) SlotPtr m_Tail;
+		alignas(64) AtomicSlotPtr m_Head;  // Always points to a sentinel node.
+		alignas(64) AtomicSlotPtr m_Tail;  // Points to the last node.
 	};
 
 
@@ -95,7 +93,7 @@ namespace Neuro::Core {
 	{
 		Slot* dummy = new Slot();
 		m_Head.store(dummy, std::memory_order::relaxed);
-		m_Tail = dummy;
+		m_Tail.store(dummy, std::memory_order::relaxed);
 	}
 
 
@@ -103,11 +101,12 @@ namespace Neuro::Core {
 	inline ConcurrentQueue<TValue>::~ConcurrentQueue()
 	{
 		// NOTE: Caller must ensure no concurrent producers/consumer.
-		while (m_Tail)
+		Slot* node = m_Head.load(std::memory_order::relaxed);
+		while (node)
 		{
-			Slot* next = m_Tail->Next.load(std::memory_order::acquire);
-			delete m_Tail;
-			m_Tail = next;
+			Slot* next = node->Next.load(std::memory_order::relaxed);
+			delete node;
+			node = next;
 		}
 	}
 
@@ -117,7 +116,7 @@ namespace Neuro::Core {
 	inline void ConcurrentQueue<TValue>::Enqueue(Args&&... args)
 	{
 		Slot* slot = new Slot(std::forward<Args>(args)...);
-		Slot* prev = m_Head.exchange(slot, std::memory_order::acq_rel);
+		Slot* prev = m_Tail.exchange(slot, std::memory_order::acq_rel);
 		prev->Next.store(slot, std::memory_order::release);
 	}
 
@@ -125,14 +124,14 @@ namespace Neuro::Core {
 	template <typename TValue>
 	inline bool ConcurrentQueue<TValue>::TryDequeue(TValue& out)
 	{
-		Slot* tail = m_Tail;
-		Slot* next = tail->Next.load(std::memory_order::acquire);
+		Slot* head = m_Head.load(std::memory_order::acquire);
+		Slot* next = head->Next.load(std::memory_order::acquire);
 		if (!next)
 			return false;
 
 		out = std::move(next->Value);
-		m_Tail = next;
-		delete tail;
+		m_Head.store(next, std::memory_order::release);
+		delete head;
 		return true;
 	}
 
@@ -142,14 +141,14 @@ namespace Neuro::Core {
 	{
 		while (true)
 		{
-			Slot* tail = m_Tail;
-			Slot* next = tail->Next.load(std::memory_order::acquire);
+			Slot* head = m_Head.load(std::memory_order::acquire);
+			Slot* next = head->Next.load(std::memory_order::acquire);
 			if (!next)
 				continue;
 
 			TValue out = std::move(next->Value);
-			m_Tail = next;
-			delete tail;
+			m_Head.store(next, std::memory_order::release);
+			delete head;
 			return out;
 		}
 	}
