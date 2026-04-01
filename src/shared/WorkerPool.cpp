@@ -48,8 +48,9 @@ namespace Neuro::Net {
 
 	void Worker::Run()
 	{
-		// Run current tasks in the queue until a Stop signal.
-		// All tasks that happen to go after Stop will be discarded without execution.
+		// Run all tasks currently in the queue. When a Stop signal is received,
+		// continue to process any remaining tasks that were enqueued before the stop,
+		// then exit. Tasks enqueued after the stop state is set are rejected.
 		while (true)
 		{
 			Task task;
@@ -65,7 +66,19 @@ namespace Neuro::Net {
 			static_assert((uint32_t)ETaskType::kNum == 2, "Add task type support.");
 
 			if (task.Type == ETaskType::kStop)
+			{
+				// Drain any remaining tasks that were enqueued before the stop signal.
+				while (m_Queue.TryDequeue(task))
+				{
+					if (task.Type == ETaskType::kWork)
+					{
+						assert(task.Functor);
+						task.Functor();
+					}
+					// Ignore any additional stop tasks (shouldn't happen).
+				}
 				break;
+			}
 
 			if (task.Type == ETaskType::kWork)
 			{
