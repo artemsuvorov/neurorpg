@@ -225,7 +225,6 @@ namespace Neuro::Tests::Internal {
 
 	static void test_destruction_completes_tasks(uint32_t pool_size)
 	{
-		std::atomic<bool> destroyed = false;
 		std::atomic<int> executed{0};
 		const int num_tasks = 200;
 
@@ -234,11 +233,9 @@ namespace Neuro::Tests::Internal {
 			for (int i = 0; i < num_tasks; ++i)
 			{
 				pool.Enqueue([&]() {
-					assert(!destroyed);
 					executed.fetch_add(1, std::memory_order_relaxed);
 				});
 			}
-			destroyed = true;
 		}
 
 		assert(executed == num_tasks);
