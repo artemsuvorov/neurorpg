@@ -258,11 +258,14 @@ namespace Neuro::Net {
 	{
 		if (!m_IsRunning.load(std::memory_order::acquire))
 			return;
-
+		
 		m_Acceptor.Close();
 		m_Context.stop();
 		if (m_Thread.joinable())
 			m_Thread.join();
+		
+		m_Workers.reset();
+
 		m_IsRunning.store(false, std::memory_order::release);
 	}
 
