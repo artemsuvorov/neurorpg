@@ -58,6 +58,16 @@ target_sources(asio INTERFACE lib/asio/include/asio.hpp)
 target_include_directories(asio INTERFACE lib/asio/include)
 
 # --------------------------------------------------
+# spdlog
+# --------------------------------------------------
+set(SPDLOG_BUILD_SHARED OFF CACHE BOOL "Build shared library" FORCE)
+set(SPDLOG_BUILD_STATIC ON  CACHE BOOL "Build static library" FORCE)
+set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "Build examples" FORCE)
+set(SPDLOG_BUILD_TESTS   OFF CACHE BOOL "Build tests" FORCE)
+
+add_subdirectory(lib/spdlog)
+
+# --------------------------------------------------
 # Project sources
 # --------------------------------------------------
 file(GLOB_RECURSE CLIENT_SOURCES CONFIGURE_DEPENDS src/client/*.cpp src/client/*.h)
@@ -69,6 +79,7 @@ file(GLOB_RECURSE SHARED_SOURCES CONFIGURE_DEPENDS src/shared/*.cpp src/shared/*
 # ------------------------------------------------------------
 add_library(shared STATIC)
 target_sources(shared PRIVATE ${SHARED_SOURCES})
+target_link_libraries(shared PRIVATE spdlog::spdlog)
 target_include_directories(shared PUBLIC src/shared)
 
 # ------------------------------------------------------------
@@ -81,6 +92,7 @@ target_link_libraries(server PRIVATE
     llama
     Threads::Threads
     asio
+    spdlog::spdlog
 )
 if (WIN32)
     target_link_libraries(server PRIVATE ws2_32)
@@ -97,9 +109,21 @@ target_compile_definitions(server PRIVATE
 # ------------------------------------------------------------
 add_executable(client)
 target_sources(client PRIVATE ${CLIENT_SOURCES})
-target_link_libraries(client PRIVATE shared llama)
+target_link_libraries(client PRIVATE shared llama spdlog::spdlog)
 
+# ------------------------------------------------------------
+#  All targets settings
+# ------------------------------------------------------------
+
+# Enable C++23 Standard
 set_target_properties(client server shared PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
+
+# Enable logging only for Debug & Release builds
+if(CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "Release")
+    target_compile_definitions(shared PUBLIC  NR_ENABLE_LOGGING NR_LOGGING_LEVEL=0)
+    target_compile_definitions(server PRIVATE NR_ENABLE_LOGGING NR_LOGGING_LEVEL=0)
+    target_compile_definitions(client PRIVATE NR_ENABLE_LOGGING NR_LOGGING_LEVEL=0)
+endif()
 
 # Set working directory to project root for debugging
 set_target_properties(client server PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
@@ -122,7 +146,7 @@ if(NEURO_BUILD_TESTS)
 
     file(GLOB_RECURSE TEST_SOURCES CONFIGURE_DEPENDS tests/*.cpp)
     add_executable(tests ${TEST_SOURCES})
-    target_link_libraries(tests PRIVATE shared Threads::Threads asio)
+    target_link_libraries(tests PRIVATE shared Threads::Threads asio spdlog::spdlog)
     target_include_directories(tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/asio/include)
     target_compile_definitions(tests PRIVATE ASIO_STANDALONE)
     set_target_properties(tests PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
@@ -148,6 +172,7 @@ if(NEURO_BUILD_TESTS)
     set_target_properties(tests PROPERTIES FOLDER "Tests")
 endif()
 
+set_target_properties(spdlog PROPERTIES FOLDER "Libs")
 set_target_properties(asio PROPERTIES FOLDER "Libs")
 set_target_properties(llama PROPERTIES FOLDER "Libs")
 set_target_properties(ggml PROPERTIES FOLDER "Libs")

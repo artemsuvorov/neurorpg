@@ -5,3 +5,5 @@
 #include <cassert>
 #include <utility>
 #include <memory>
+
+#include "Logging.h"

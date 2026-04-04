@@ -10,12 +10,6 @@
 using tcp = asio::ip::tcp;
 
 
-static void PrintError(const std::error_code& error)
-{
-	printf("Error %u: %s\n", error.value(), error.message().c_str());
-}
-
-
 namespace Neuro::Net {
 
 	class IWorkerDispatcher
@@ -74,17 +68,17 @@ namespace Neuro::Net {
 			std::string message = co_await Read(error);
 			if (error)
 				break;
-			printf("Received: %s\n", message.c_str());
+			NR_INFO("Received: {}", message);
 
 			std::string response = co_await Dispatch(std::move(message), error);
 			if (error)
 				break;
 
-			printf("Response: %s\n", response.c_str());
+			NR_INFO("Response: {}", response);
 			co_await Write(std::move(response), error);
 		}
 
-		PrintError(error);
+		NR_ERROR("Error {}: {}", error.value(), error.message());
 	}
 
 
@@ -174,7 +168,7 @@ namespace Neuro::Net {
 		asio::error_code error;
 		m_Acceptor.close(error);
 		if (error)
-			PrintError(error);
+			NR_ERROR("Error {}: {}", error.value(), error.message());
 	}
 
 
@@ -183,7 +177,7 @@ namespace Neuro::Net {
 		m_Acceptor.async_accept([this](asio::error_code error, tcp::socket socket) mutable {
 			if (error)
 			{
-				PrintError(error);
+				NR_ERROR("Error {}: {}", error.value(), error.message());
 				return;
 			}
 
@@ -238,11 +232,11 @@ namespace Neuro::Net {
 		asio::error_code error;
 		if (!m_Acceptor.Open(port, error))
 		{
-			PrintError(error);
+			NR_ERROR("Error {}: {}", error.value(), error.message());
 			return;
 		}
 
-		printf("Server listening on port %u ...\n", port);
+		NR_INFO("Server listening on port {} ...", port);
 		m_IsRunning.store(true, std::memory_order::release);
 		m_Workers = std::make_unique<WorkerPool>(4);
 
@@ -258,12 +252,12 @@ namespace Neuro::Net {
 	{
 		if (!m_IsRunning.load(std::memory_order::acquire))
 			return;
-		
+
 		m_Acceptor.Close();
 		m_Context.stop();
 		if (m_Thread.joinable())
 			m_Thread.join();
-		
+
 		m_Workers.reset();
 
 		m_IsRunning.store(false, std::memory_order::release);
