@@ -8,6 +8,7 @@
 #include <chrono>
 #include <random>
 
+#include "Precompiled.h"
 #include "ConcurrentQueue.h"
 
 
@@ -80,7 +81,7 @@ namespace Neuro::Tests::Internal {
 		ConcurrentQueue<int> q;
 		q.Enqueue(42);
 		int val = q.Dequeue();
-		assert(val == 42);
+		NR_DEV_ASSERT(val == 42);
 		(void)val;
 		std::cout << "test_basic passed\n";
 	}
@@ -109,11 +110,11 @@ namespace Neuro::Tests::Internal {
 		std::vector<int> count(N, 0);
 		for (int v : results)
 		{
-			assert(v >= 0 && v < N);
+			NR_DEV_ASSERT(v >= 0 && v < N);
 			count[v]++;
 		}
 		for (int i = 0; i < N; ++i)
-			assert(count[i] == 1);
+			NR_DEV_ASSERT(count[i] == 1);
 		std::cout << "test_multiple_producers passed\n";
 	}
 
@@ -126,7 +127,7 @@ namespace Neuro::Tests::Internal {
 			int val;
 			while (!q.TryDequeue(val))
 				std::this_thread::yield();
-			assert(val == 123);
+			NR_DEV_ASSERT(val == 123);
 			(void)val;
 		});
 		std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -170,16 +171,16 @@ namespace Neuro::Tests::Internal {
 			t.join();
 		consumer.join();
 
-		assert(produced == total);
-		assert(results.size() == total);
+		NR_DEV_ASSERT(produced == total);
+		NR_DEV_ASSERT(results.size() == total);
 		std::vector<int> count(total, 0);
 		for (int v : results)
 		{
-			assert(v >= 0 && v < total);
+			NR_DEV_ASSERT(v >= 0 && v < total);
 			count[v]++;
 		}
 		for (int i = 0; i < total; ++i)
-			assert(count[i] == 1);
+			NR_DEV_ASSERT(count[i] == 1);
 		std::cout << "test_stress_volume passed\n";
 	}
 
@@ -232,16 +233,16 @@ namespace Neuro::Tests::Internal {
 			t.join();
 		consumer.join();
 
-		assert(produced == total);
-		assert(results.size() == total);
+		NR_DEV_ASSERT(produced == total);
+		NR_DEV_ASSERT(results.size() == total);
 		std::vector<int> count(total, 0);
 		for (int v : results)
 		{
-			assert(v >= 0 && v < total);
+			NR_DEV_ASSERT(v >= 0 && v < total);
 			count[v]++;
 		}
 		for (int i = 0; i < total; ++i)
-			assert(count[i] == 1);
+			NR_DEV_ASSERT(count[i] == 1);
 		std::cout << "test_random_delays passed\n";
 	}
 
@@ -251,11 +252,11 @@ namespace Neuro::Tests::Internal {
 	{
 		ConcurrentQueue<int> q;
 		int out = 0;
-		assert(!q.TryDequeue(out));
+		NR_DEV_ASSERT(!q.TryDequeue(out));
 		q.Enqueue(42);
-		assert(q.TryDequeue(out));
-		assert(out == 42);
-		assert(!q.TryDequeue(out));
+		NR_DEV_ASSERT(q.TryDequeue(out));
+		NR_DEV_ASSERT(out == 42);
+		NR_DEV_ASSERT(!q.TryDequeue(out));
 		(void)out;
 		std::cout << "test_try_dequeue passed\n";
 	}
@@ -285,7 +286,7 @@ namespace Neuro::Tests::Internal {
 		ConcurrentQueue<MoveOnly> q;
 		q.Enqueue(MoveOnly(123));
 		MoveOnly val = q.Dequeue();
-		assert(val.value == 123);
+		NR_DEV_ASSERT(val.value == 123);
 		(void)val;
 		std::cout << "test_move_only_type passed\n";
 	}
@@ -305,8 +306,8 @@ namespace Neuro::Tests::Internal {
 		}
 		// Enqueue moves the argument into the slot, Dequeue moves from slot to local.
 		// There should be no copies.
-		assert(MoveCounter::moves >= 2);  // at least two moves
-		assert(MoveCounter::copies == 0);
+		NR_DEV_ASSERT(MoveCounter::moves >= 2);  // at least two moves
+		NR_DEV_ASSERT(MoveCounter::copies == 0);
 		std::cout << "test_move_only_tracking passed (moves=" << MoveCounter::moves << ", copies=" << MoveCounter::copies
 		          << ")\n";
 	}
@@ -333,7 +334,7 @@ namespace Neuro::Tests::Internal {
 		}
 		// All items (including the remaining 50 and the dummy) should be destroyed.
 		// The total constructed count should equal the total destructed count.
-		assert(Tracker::constructed == Tracker::destructed);
+		NR_DEV_ASSERT(Tracker::constructed == Tracker::destructed);
 		std::cout << "test_destruction_with_items passed\n";
 	}
 
@@ -350,7 +351,7 @@ namespace Neuro::Tests::Internal {
 		for (int i = 0; i < N; ++i)
 		{
 			int val = q.Dequeue();
-			assert(val == i);
+			NR_DEV_ASSERT(val == i);
 			(void)val;
 		}
 		std::cout << "test_large_volume_ordering passed\n";
@@ -366,17 +367,17 @@ namespace Neuro::Tests::Internal {
 		for (int i = 0; i < 5; ++i)
 		{
 			int out;
-			assert(q.TryDequeue(out));
+			NR_DEV_ASSERT(q.TryDequeue(out));
 			(void)out;
 		}
 		// Still 5 items left
 		int out2;
-		assert(q.TryDequeue(out2));
+		NR_DEV_ASSERT(q.TryDequeue(out2));
 		// Drain all
 		int tmp;
 		while (q.TryDequeue(tmp))
 			;  // keep draining
-		assert(!q.TryDequeue(out2));
+		NR_DEV_ASSERT(!q.TryDequeue(out2));
 		(void)out2;
 		std::cout << "test_try_dequeue_after_drain passed\n";
 	}
@@ -433,8 +434,8 @@ namespace Neuro::Tests::Internal {
 			t.join();
 		consumer.join();
 
-		assert(produced == total);
-		assert(consumed == total);
+		NR_DEV_ASSERT(produced == total);
+		NR_DEV_ASSERT(consumed == total);
 		std::cout << "test_heavy_contention passed\n";
 	}
 
@@ -451,7 +452,7 @@ namespace Neuro::Tests::Internal {
 		for (int i = 0; i < num_items; ++i)
 		{
 			int val = q.Dequeue();
-			assert(val == i);
+			NR_DEV_ASSERT(val == i);
 			(void)val;
 		}
 		std::cout << "test_large_volume passed\n";
@@ -466,8 +467,8 @@ namespace Neuro::Tests::Internal {
 		VectorType v1 = {1, 2, 3};
 		q.Enqueue(std::move(v1));     // move
 		VectorType v2 = q.Dequeue();  // move out
-		assert(v2.size() == 3 && v2[0] == 1 && v2[1] == 2 && v2[2] == 3);
-		assert(v1.empty());  // v1 should be moved-from
+		NR_DEV_ASSERT(v2.size() == 3 && v2[0] == 1 && v2[1] == 2 && v2[2] == 3);
+		NR_DEV_ASSERT(v1.empty());  // v1 should be moved-from
 		std::cout << "test_non_trivial_move_type passed\n";
 	}
 
@@ -479,13 +480,13 @@ namespace Neuro::Tests::Internal {
 
 		int val;
 		(void)val;
-		assert(!q.TryDequeue(val));
+		NR_DEV_ASSERT(!q.TryDequeue(val));
 
 		q.Enqueue(42);
-		assert(q.TryDequeue(val));
-		assert(val == 42);
+		NR_DEV_ASSERT(q.TryDequeue(val));
+		NR_DEV_ASSERT(val == 42);
 
-		assert(!q.TryDequeue(val));
+		NR_DEV_ASSERT(!q.TryDequeue(val));
 
 		std::cout << "test_empty_behavior passed\n";
 	}
@@ -506,7 +507,7 @@ namespace Neuro::Tests::Internal {
 			while (q.TryDequeue(val))
 				count++;
 
-			assert(count == 1000);
+			NR_DEV_ASSERT(count == 1000);
 		}
 
 		std::cout << "test_reuse_after_drain passed\n";
@@ -555,7 +556,7 @@ namespace Neuro::Tests::Internal {
 					int val;
 					if (q.TryDequeue(val))
 					{
-						assert(val >= 0 && val < total);
+						NR_DEV_ASSERT(val >= 0 && val < total);
 						seen[val]++;
 						consumed++;
 					}
@@ -567,15 +568,15 @@ namespace Neuro::Tests::Internal {
 				}
 				// Verify all items seen exactly once
 				for (int i = 0; i < total; ++i)
-					assert(seen[i] == 1);
+					NR_DEV_ASSERT(seen[i] == 1);
 			});
 
 			for (auto& t : producers)
 				t.join();
 			consumer.join();
 
-			assert(produced == total);
-			assert(consumed == total);
+			NR_DEV_ASSERT(produced == total);
+			NR_DEV_ASSERT(consumed == total);
 		}
 		std::cout << "test_dummy_node_hazard passed\n";
 	}
@@ -609,17 +610,17 @@ namespace Neuro::Tests::Internal {
 		for (int i = 0; i < num_items; ++i)
 		{
 			Complex c = q.Dequeue();
-			assert(c.id == i);
-			assert(c.data.size() == 3);
-			assert(c.data[0] == i);
-			assert(c.data[1] == i + 1);
-			assert(c.data[2] == i + 2);
-			assert(c.name == "Item" + std::to_string(i));
+			NR_DEV_ASSERT(c.id == i);
+			NR_DEV_ASSERT(c.data.size() == 3);
+			NR_DEV_ASSERT(c.data[0] == i);
+			NR_DEV_ASSERT(c.data[1] == i + 1);
+			NR_DEV_ASSERT(c.data[2] == i + 2);
+			NR_DEV_ASSERT(c.name == "Item" + std::to_string(i));
 		}
 
 		// Ensure queue is empty
 		Complex dummy;
-		assert(!q.TryDequeue(dummy));
+		NR_DEV_ASSERT(!q.TryDequeue(dummy));
 
 		std::cout << "test_complex_type passed\n";
 	}

@@ -8,7 +8,7 @@ namespace Neuro::Net {
 	static bool IsTaskValid(const Task& task)
 	{
 		static_assert((uint32_t)ETaskType::kNum == 2, "Add task type support.");
-		assert(task.Type < ETaskType::kNum);
+		NR_DBG_ASSERT(task.Type < ETaskType::kNum);
 		return task.Type == ETaskType::kStop || (task.Type == ETaskType::kWork && task.Functor);
 	}
 
@@ -21,7 +21,7 @@ namespace Neuro::Net {
 
 	bool Worker::TryEnqueue(Task&& task)
 	{
-		assert(IsTaskValid(task));
+		NR_DBG_ASSERT(IsTaskValid(task));
 
 		// Gaurd Enqueue`s after Stop.
 		if (m_State.load(std::memory_order::acquire) != EWorkerState::kRunning)
@@ -62,7 +62,7 @@ namespace Neuro::Net {
 				continue;
 			}
 
-			assert(IsTaskValid(task));
+			NR_DBG_ASSERT(IsTaskValid(task));
 			static_assert((uint32_t)ETaskType::kNum == 2, "Add task type support.");
 
 			if (task.Type == ETaskType::kStop)
@@ -72,7 +72,7 @@ namespace Neuro::Net {
 				{
 					if (task.Type == ETaskType::kWork)
 					{
-						assert(task.Functor);
+						NR_DBG_ASSERT(task.Functor);
 						task.Functor();
 					}
 					// Ignore any additional stop tasks (shouldn't happen).
@@ -82,7 +82,7 @@ namespace Neuro::Net {
 
 			if (task.Type == ETaskType::kWork)
 			{
-				assert(task.Functor);
+				NR_DBG_ASSERT(task.Functor);
 				task.Functor();
 			}
 		}
@@ -112,7 +112,7 @@ namespace Neuro::Net {
 
 	WorkerPool::WorkerPool(uint32_t count) : m_Workers(count)
 	{
-		assert(count > 0 && "Worker pool cannot be empty.");
+		NR_DBG_ASSERT(count > 0 && "Worker pool cannot be empty.");
 
 		for (Worker& worker : m_Workers)
 			worker.Start();
@@ -128,13 +128,13 @@ namespace Neuro::Net {
 
 	void WorkerPool::Enqueue(Task&& task)
 	{
-		assert(m_Workers.size() > 0 && "Worker pool is empty.");
-		assert(IsTaskValid(task));
+		NR_DBG_ASSERT(m_Workers.size() > 0 && "Worker pool is empty.");
+		NR_DBG_ASSERT(IsTaskValid(task));
 		uint32_t index = m_Index.fetch_add(1, std::memory_order::relaxed);
 		Worker& worker = m_Workers[index % m_Workers.size()];
 		bool enqueued = worker.TryEnqueue(std::move(task));
 		(void)enqueued;
-		assert(enqueued && "Task dropped during enqueue.");
+		NR_DBG_ASSERT(enqueued && "Task dropped during enqueue.");
 	}
 
 }  // namespace Neuro::Net

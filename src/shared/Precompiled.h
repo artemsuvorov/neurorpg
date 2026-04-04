@@ -6,4 +6,5 @@
 #include <utility>
 #include <memory>
 
+#include "Asserts.h"
 #include "Logging.h"

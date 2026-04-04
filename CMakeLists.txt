@@ -118,6 +118,11 @@ target_link_libraries(client PRIVATE shared llama spdlog::spdlog)
 # Enable C++23 Standard
 set_target_properties(client server shared PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
 
+# Enable asserts
+target_compile_definitions(client PRIVATE NR_ENABLE_ASSERTS)
+target_compile_definitions(server PRIVATE NR_ENABLE_ASSERTS)
+target_compile_definitions(shared PRIVATE NR_ENABLE_ASSERTS)
+
 # Enable logging only for Debug & Release builds
 if(CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "Release")
     target_compile_definitions(shared PUBLIC  NR_ENABLE_LOGGING NR_LOGGING_LEVEL=0)
@@ -150,6 +155,9 @@ if(NEURO_BUILD_TESTS)
     target_include_directories(tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/asio/include)
     target_compile_definitions(tests PRIVATE ASIO_STANDALONE)
     set_target_properties(tests PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
+
+    # Enable asserts for now, later use a proper testing lib
+    target_compile_definitions(tests PRIVATE NR_ENABLE_ASSERTS)
 
     if (MSVC)
         target_compile_options(tests PRIVATE /W4)

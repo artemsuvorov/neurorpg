@@ -10,6 +10,7 @@
 #include <random>
 #include <functional>
 
+#include "Precompiled.h"
 #include "WorkerPool.h"
 
 
@@ -51,7 +52,7 @@ namespace Neuro::Tests::Internal {
 
 		while (counter.load(std::memory_order_acquire) < num_tasks)
 			std::this_thread::yield();
-		assert(counter == num_tasks);
+		NR_DEV_ASSERT(counter == num_tasks);
 		std::cout << "test_basic_execution (size=" << pool_size << ") passed\n";
 	}
 
@@ -74,7 +75,7 @@ namespace Neuro::Tests::Internal {
 		while (completed.load(std::memory_order_acquire) < num_tasks)
 			std::this_thread::yield();
 		for (int i = 0; i < num_tasks; ++i)
-			assert(hits[i] == 1);
+			NR_DEV_ASSERT(hits[i] == 1);
 		std::cout << "test_each_task_executes_once (size=" << pool_size << ") passed\n";
 	}
 
@@ -106,9 +107,9 @@ namespace Neuro::Tests::Internal {
 		while (completed.load(std::memory_order_acquire) < num_tasks)
 			std::this_thread::yield();
 		if (pool_size > 1)
-			assert(max_active > 1);
+			NR_DEV_ASSERT(max_active > 1);
 		else
-			assert(max_active == 1);
+			NR_DEV_ASSERT(max_active == 1);
 		std::cout << "test_concurrent_execution (size=" << pool_size << ") passed\n";
 	}
 
@@ -143,7 +144,7 @@ namespace Neuro::Tests::Internal {
 			if (counter != tasks_per_round)
 			{
 				printf("FAILED at round %d: %d\n", round, counter.load());
-				assert(false);
+				NR_DEV_ASSERT(false);
 			}
 		}
 		std::cout << "test_stress (size=" << pool_size << ") passed\n";
@@ -177,7 +178,7 @@ namespace Neuro::Tests::Internal {
 
 		while (total_tasks.load(std::memory_order_acquire) < num_threads * tasks_per_thread)
 			std::this_thread::yield();
-		assert(total_tasks == num_threads * tasks_per_thread);
+		NR_DEV_ASSERT(total_tasks == num_threads * tasks_per_thread);
 		std::cout << "test_concurrent_enqueue (size=" << pool_size << ") passed\n";
 	}
 
@@ -218,7 +219,7 @@ namespace Neuro::Tests::Internal {
 
 		while (counter.load(std::memory_order_acquire) < expected)
 			std::this_thread::yield();
-		assert(counter == expected);
+		NR_DEV_ASSERT(counter == expected);
 		std::cout << "test_recursive_enqueue (size=" << pool_size << ") passed\n";
 	}
 
@@ -238,7 +239,7 @@ namespace Neuro::Tests::Internal {
 			}
 		}
 
-		assert(executed == num_tasks);
+		NR_DEV_ASSERT(executed == num_tasks);
 		std::cout << "test_destruction_completes_tasks (size=" << pool_size << ") passed\n";
 	}
 
@@ -259,7 +260,7 @@ namespace Neuro::Tests::Internal {
 		while (counter.load(std::memory_order_acquire) < num_tasks)
 			std::this_thread::yield();
 
-		assert(counter == num_tasks);
+		NR_DEV_ASSERT(counter == num_tasks);
 		std::cout << "test_eventual_completion_under_load (size=" << pool_size << ") passed\n";
 	}
 
